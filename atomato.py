@@ -4,13 +4,7 @@ import mouse
 import cv2
 from mss import mss
 import os
-
-class Rect:
-    def __init__(self, x : int | None=0, y : int | None=0, width : int | None=0, height : int | None=0):
-        self.x = x
-        self.y = y
-        self.width = width
-        self.height = height
+import time
 
 class TomatoImage:
     def __init__(self, image : str | np.ndarray):
@@ -39,17 +33,20 @@ class TomatoImage:
         self.__image = self.__black_white_image(raw_image)
 
     def getHeight(self) -> int:
-        return len(self.__image)
-    
-    def getWidth(self) -> int:
         return len(self.__image[0])
     
-    def getImageMatrix(self) -> list[list[int]]:
+    def getWidth(self) -> int:
+        return len(self.__image)
+    
+    def getImageMatrix(self) -> np.ndarray:
         return self.__image
 
 class Tomato:
 
-    def __screen_shot_tomato(self) -> TomatoImage:
+    def __init__(self):
+        pass
+
+    def screen_shot_tomato(self) -> TomatoImage:
 
         monitor = mss().monitors[1]
         screenshot = mss().grab(monitor)
@@ -58,23 +55,36 @@ class Tomato:
 
         return TomatoImage(screenshot_matrix_rgb)
 
-    def find_tomato_in_screen(self, tomato : TomatoImage, under_step : int=1) -> tuple[int, int]:
-        
-        screen = self.__screen_shot_tomato()
+    @staticmethod
+    def find_element_in_screen(element : TomatoImage, screen : TomatoImage, section : tuple[int, int, int, int] | None=None, under_step : int=1) -> tuple[int, int]:
 
-        if under_step > tomato.getWidth() or under_step > tomato.getHeight(): raise ValueError("parameter 'under_step' is larger than one of tomato dimensions")
-        h_step = tomato.getWidth() // under_step
-        v_step = tomato.getHeight()// under_step
+        start_x, start_y, width, height = section if section is not None else (0, 0, screen.getWidth(), screen.getHeight())
+        if under_step > element.getWidth() or under_step > element.getHeight(): raise ValueError("The parameter 'under_step' is larger than one of the element's dimensions")
+        h_step = element.getWidth() // under_step
+        v_step = element.getHeight()// under_step
 
-        for i in range(0, screen.getWidth(), h_step):
-            for j in range(0, screen.getHeight(), v_step):
-                pass
+        x_points = list(range(start_x, width - h_step + 1, h_step))
+        if x_points[-1] + h_step < width:
+            x_points.append(width - h_step)
 
-    def element_is_visible(self, element : TomatoImage | str, step : int | None=None) -> bool:
+        y_points = list(range(start_y, height - v_step + 1, v_step))
+        if y_points[-1] + v_step < height:
+            y_points.append(height - v_step)
+
+        for i in x_points:
+            for j in y_points:
+
+                screen_section = screen.getImageMatrix()[i:i+h_step, j:j+v_step]
+                cv2.imshow("Screen Section", screen_section)
+                cv2.waitKey(0)
+
+
+    def element_is_visible(self, element : TomatoImage, section : tuple[int, int, int, int] | None=None, under_step : int=1) -> bool:
         
         if isinstance(element, str): element = TomatoImage(element)
 
-        element_coordinates = self.find_tomato_in_screen(element)
+        screen = self.screen_shot_tomato()
+        element_coordinates = self.find_element_in_screen(element, screen, section, under_step)
 
         return not any(coord is None for coord in element_coordinates)
 
