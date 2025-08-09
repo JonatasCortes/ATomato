@@ -2,10 +2,14 @@ from atomato import TomatoImage
 from atomato import Tomato as tmt
 import cv2
 
-tomato = TomatoImage("tomato.jpeg")
-tomato_section = TomatoImage("tomato_section.jpg")
+screen = TomatoImage("screen.jpg")
+element1 = TomatoImage("element1.jpg")
+element2 = TomatoImage("element2.jpg")
+element3 = TomatoImage("element3.jpg")
+element4 = TomatoImage("element4.jpg")
 
-cv2.imshow("bah", tomato_section.getImageMatrix())
-cv2.waitKey(0)
-
-tmt.find_element_in_screen(tomato_section, tomato)
+print(tmt.find_element_in_screen(element1, screen, under_step=1, cutoff=10))
+print(tmt.find_element_in_screen(element2, screen, under_step=1, cutoff=10))
+print(tmt.find_element_in_screen(element3, screen, under_step=1, cutoff=10))
+print(tmt.find_element_in_screen(element4, screen, under_step=1, cutoff=10))
+    
