@@ -44,6 +44,18 @@ class Tomato:
     def __init__(self):
         pass
 
+    def __safe_section(self, matrix : np.ndarray, i : int, j : int, height : int, width : int) -> np.ndarray:
+        if i + height > matrix.shape[0] or j + width > matrix.shape[1]:
+            return None
+        return matrix[i:i+height, j:j+width]
+
+
+    def distance_between_vectors(self, v1 : np.ndarray, v2 : np.ndarray) -> float:
+        if v1.shape != v2.shape: raise ValueError("vectors must have the exact same dimensions")
+        v1 = v1.astype(np.float32) / 255.0
+        v2 = v2.astype(np.float32) / 255.0
+        return np.linalg.norm(v1 - v2)
+
     def screen_shot_tomato(self) -> TomatoImage:
 
         monitor = mss().monitors[1]
@@ -53,8 +65,7 @@ class Tomato:
 
         return TomatoImage(screenshot_matrix_rgb)
 
-    @staticmethod
-    def find_pixel_size(image: np.ndarray | TomatoImage | str, prominence: float = 10, tolerance: float = 0.3) -> int:
+    def find_pixel_size(self, image: np.ndarray | TomatoImage | str, prominence: float = 10, tolerance: float = 0.3) -> int:
         if isinstance(image, str):
             image = TomatoImage(image)
         if isinstance(image, TomatoImage):
@@ -95,8 +106,7 @@ class Tomato:
         else:
             return 1  # Não detectável ou não confiável
 
-    @staticmethod
-    def match_resolution(img1: np.ndarray | TomatoImage | str, img2: np.ndarray | TomatoImage | str, downscale_factor: int = 2, min_size: int = 32) -> tuple[np.ndarray, np.ndarray]:
+    def match_resolution(self, img1: np.ndarray | TomatoImage | str, img2: np.ndarray | TomatoImage | str, downscale_factor: int = 2, min_size: int = 32) -> tuple[np.ndarray, np.ndarray]:
 
         if isinstance(img1, str) or isinstance(img1, np.ndarray): img1 = TomatoImage(img1)
         if isinstance(img2, str) or isinstance(img2, np.ndarray): img2 = TomatoImage(img2)
@@ -104,8 +114,8 @@ class Tomato:
         matrix1 = img1.getImageMatrix()
         matrix2 = img2.getImageMatrix()
 
-        pixel_size_img1 = Tomato.find_pixel_size(matrix1)
-        pixel_size_img2 = Tomato.find_pixel_size(matrix2)
+        pixel_size_img1 = self.find_pixel_size(matrix1)
+        pixel_size_img2 = self.find_pixel_size(matrix2)
 
         new_dim_matrix1 = (img1.getWidth()//pixel_size_img1, img1.getHeight()//pixel_size_img1)
         matrix1_redim = cv2.resize(matrix1, new_dim_matrix1)
@@ -115,50 +125,52 @@ class Tomato:
 
         return TomatoImage(matrix1_redim), TomatoImage(matrix2_redim)
 
-    @staticmethod
-    def find_element_in_screen(element : TomatoImage, screen : TomatoImage, section : tuple[int, int, int, int] | None=None, under_step : int=1, cutoff : int=5, debug : bool=False) -> tuple[int, int]:
+    def find_element_in_screen(self, element : TomatoImage, screen : TomatoImage, section : tuple[int, int, int, int] | None=None, under_step : int | None=None, cutoff : float=8, debug : bool=False, find_closest : bool=False) -> tuple[int, int]:
 
-        element, screen = Tomato.match_resolution(element, screen)
+        element, screen = self.match_resolution(element, screen)
 
         element_width = element.getWidth()
         element_height = element.getHeight()
 
+        if under_step is None: under_step = min([element_width, element_height])//2
+
         start_x, start_y, width, height = section if section is not None else (0, 0, screen.getWidth(), screen.getHeight())
-        if under_step > element_width or under_step > element_height: raise ValueError("The parameter 'under_step' is larger than one of the element's dimensions")
+        if under_step > element_width or under_step > element_height: raise ValueError(f"The parameter 'under_step' is larger than one of the element's dimensions w:{element_width}, h:{element_height}")
         h_step = element_width // under_step
         v_step = element_height// under_step
 
-        x_points = list(range(start_x, width - h_step + 1, h_step))
-        if x_points[-1] + h_step < width:
-            x_points.append(width - h_step)
+        x_points = list(range(start_x, width - element_width + 1, h_step))
+        last_x = width - element_width
+        if x_points[-1] != last_x: x_points.append(last_x)
 
-        y_points = list(range(start_y, height - v_step + 1, v_step))
-        if y_points[-1] + v_step < height:
-            y_points.append(height - v_step)
+        y_points = list(range(start_y, height - element_height + 1, v_step))
+        last_y = height - element_height
+        if y_points[-1] != last_y: y_points.append(last_y)
 
-        element_hash = average_hash(Image.fromarray(element.getImageMatrix()))
-
+        distances_and_centers = []
         counter = 0
         for i in x_points:
             for j in y_points:
 
-                screen_section = screen.getImageMatrix()[i:i+element_height, j:j+element_width]
-                section_hash = average_hash(Image.fromarray(screen_section))
+                screen_section = self.__safe_section(screen.getImageMatrix(), i, j, element_height, element_width)
+                if screen_section is None: continue
 
                 center_x = i + h_step // 2
                 center_y = j + v_step // 2
 
-                if debug:
-                    cv2.imshow("element", element.getImageMatrix())
-                    cv2.imshow("screen section", screen_section)
-                    time.sleep(1)
-                    cv2.destroyAllWindows()
-                    print(np.abs(element_hash - section_hash))
+                difference = self.distance_between_vectors(element.getImageMatrix(), screen_section)
 
-                if np.abs(element_hash - section_hash) < cutoff:
+                if difference < cutoff:
                     return (center_x, center_y)
                 
+                distances_and_centers.append((difference, (center_x, center_y)))
                 counter += 1
+        
+        if find_closest:
+            min_difference = min(distances_and_centers, key=lambda x: x[0])[0]
+            closest_coord = min(distances_and_centers, key=lambda x: x[0])[1]
+            print(min_difference)
+            return closest_coord
 
     def element_is_visible(self, element : TomatoImage, section : tuple[int, int, int, int] | None=None, under_step : int=1) -> bool:
         
