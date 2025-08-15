@@ -30,13 +30,13 @@ class TomatoImage:
         if raw_image.shape == 0: raise ValueError("The given image could not be resolved")
         self.__image = self.__black_white_image(raw_image)
 
-    def getHeight(self) -> int:
+    def get_height(self) -> int:
         return len(self.__image)
     
-    def getWidth(self) -> int:
+    def get_width(self) -> int:
         return len(self.__image[0])
     
-    def getImageMatrix(self) -> np.ndarray:
+    def get_image_matrix(self) -> np.ndarray:
         return self.__image
 
 class TomatoUtils:
@@ -52,6 +52,7 @@ class TomatoUtils:
 
     def screen_shot_tomato(self) -> TomatoImage:
 
+        mouse.move(0, 0)
         monitor = mss().monitors[1]
         screenshot = mss().grab(monitor)
         screenshot_matrix = np.array(screenshot)
@@ -82,7 +83,7 @@ class TomatoUtils:
         if isinstance(image, str):
             image = TomatoImage(image)
         if isinstance(image, TomatoImage):
-            image = image.getImageMatrix()
+            image = image.get_image_matrix()
         if not isinstance(image, np.ndarray):
             raise TypeError("Image type is not suported")
         
@@ -105,71 +106,68 @@ class TomatoUtils:
         if not isinstance(img1, TomatoImage): img1 = TomatoImage(img1)
         if not isinstance(img2, TomatoImage): img2 = TomatoImage(img2)
 
-        matrix1 = img1.getImageMatrix()
-        matrix2 = img2.getImageMatrix()
+        matrix1 = img1.get_image_matrix()
+        matrix2 = img2.get_image_matrix()
 
         pixel_size_img1 = self.find_pixel_size(matrix1)
         pixel_size_img2 = self.find_pixel_size(matrix2)
 
-        new_dim_matrix1 = (img1.getWidth()//pixel_size_img1, img1.getHeight()//pixel_size_img1)
+        new_dim_matrix1 = (img1.get_width()//pixel_size_img1, img1.get_height()//pixel_size_img1)
         matrix1_redim = cv2.resize(matrix1, new_dim_matrix1)
 
-        new_dim_matrix2 = (img2.getWidth()//pixel_size_img2, img2.getHeight()//pixel_size_img2)
+        new_dim_matrix2 = (img2.get_width()//pixel_size_img2, img2.get_height()//pixel_size_img2)
         matrix2_redim = cv2.resize(matrix2, new_dim_matrix2)
 
         return TomatoImage(matrix1_redim), TomatoImage(matrix2_redim)
 
-class Tomato:
-
-    def __init__(self):
-        self.__utils = TomatoUtils()
-
-    def __safe_section(self, matrix : np.ndarray, i : int, j : int, element_height : int, element_width : int) -> np.ndarray:
-        if i + element_height > matrix.shape[0] or j + element_width > matrix.shape[1]:
+    def __safe_section(self, matrix : np.ndarray, i : int, j : int, image_height : int, image_width : int) -> np.ndarray:
+        if i + image_height > matrix.shape[0] or j + image_width > matrix.shape[1]:
             return None
-        return matrix[i:i+element_height, j:j+element_width]
+        return matrix[i:i+image_height, j:j+image_width]
 
-    def __get_iteration_key_points(self, screen_dim : int, element_dim : int, step : int) -> list[int]:
-        key_points = list(range(0, screen_dim - element_dim + 1, step))
-        last_x = screen_dim - element_dim
+    def __get_iteration_key_points(self, screen_dim : int, image_dim : int, step : int) -> list[int]:
+        key_points = list(range(0, screen_dim - image_dim + 1, step))
+        last_x = screen_dim - image_dim
         if key_points[-1] != last_x: key_points.append(last_x)
         return key_points
 
-    def find_element_in_screen(self, element : TomatoImage, screen : TomatoImage, under_step : int | None=None, cutoff : float | None=None, show : bool=False) -> tuple[int, int]:
+    def find_image_in_screen(self, image : TomatoImage, screen : TomatoImage, under_step : int | None=None, cutoff : float | None=None, show : bool=False) -> tuple[int, int]:
 
-        element, screen = self.__utils.match_resolution(element, screen)
-        element_matrix, screen_matrix = (element.getImageMatrix(), screen.getImageMatrix())
+        start = time.time()
+
+        image, screen = self.match_resolution(image, screen)
+        image_matrix, screen_matrix = (image.get_image_matrix(), screen.get_image_matrix())
  
-        if len(element_matrix) > len(screen_matrix) or len(element_matrix[0]) > len(screen_matrix[0]): raise ValueError("Element must be smaller than screen in all dimensions")
+        if len(image_matrix) > len(screen_matrix) or len(image_matrix[0]) > len(screen_matrix[0]): raise ValueError("image must be smaller than screen in all dimensions")
         
-        element_width, screen_width = (element.getWidth(), screen.getWidth())
-        element_height, screen_height = (element.getHeight(), screen.getHeight())
+        image_width, screen_width = (image.get_width(), screen.get_width())
+        image_height, screen_height = (image.get_height(), screen.get_height())
 
-        if under_step is None: under_step = min([element_width, element_height])
-        if under_step > element_width or under_step > element_height: raise ValueError(f"The parameter 'under_step' is larger than one of the element's dimensions w:{element_width}, h:{element_height}")
+        if under_step is None: under_step = min([image_width, image_height])
+        if under_step > image_width or under_step > image_height: raise ValueError(f"The parameter 'under_step' is larger than one of the image's dimensions w:{image_width}, h:{image_height}")
         
-        h_step = element_width // under_step
-        v_step = element_height// under_step
+        h_step = image_width // under_step
+        v_step = image_height// under_step
 
-        x_points = self.__get_iteration_key_points(screen_width, element_width, h_step)
-        y_points = self.__get_iteration_key_points(screen_height, element_height, v_step)
+        x_points = self.__get_iteration_key_points(screen_width, image_width, h_step)
+        y_points = self.__get_iteration_key_points(screen_height, image_height, v_step)
 
         distances_centers_and_matrixes = []
-
         for i in x_points:
             for j in y_points:
-
-                screen_section = self.__safe_section(screen_matrix, i, j, element_height, element_width)
+                screen_section = self.__safe_section(screen_matrix, i, j, image_height, image_width)
                 if screen_section is None: continue
 
-                center_x = i + h_step // 2
-                center_y = j + v_step // 2
+                center_y = i + h_step // 2
+                center_x = j + v_step // 2
 
-                difference = self.__utils.distance_between_vectors(element_matrix, screen_section)
+                difference = self.distance_between_vectors(image_matrix, screen_section)
 
                 if cutoff is not None and difference < cutoff:
                     if show:
-                        cv2.imshow("element found", screen_section)
+                        end = time.time()
+                        print(f"\nEXECUTION TIME (seconds): {end - start:.4f}\n")
+                        cv2.imshow("image found", screen_section)
                         cv2.waitKey(0)
                         cv2.destroyAllWindows()
 
@@ -181,20 +179,89 @@ class Tomato:
             closest = min(distances_centers_and_matrixes, key=lambda x: x["DIFFERENCE"])
 
             if show:
-                cv2.imshow("element found", closest["MATRIX"])
-                cv2.waitKey(0)
-                cv2.destroyAllWindows()
+                end = time.time()
+                print(f"\nEXECUTION TIME (seconds): {end - start:.4f}\n")
                 print(f"\nMIN CUTOFF: {closest['DIFFERENCE']}\n")
 
+                cv2.imshow("image found", closest["MATRIX"])
+                cv2.waitKey(0)
+                cv2.destroyAllWindows()  
+
             return closest["CENTER"]
+        return(None, None)
 
-    def element_is_visible(self, element : TomatoImage, section : tuple[int, int, int, int] | None=None, under_step : int=1) -> bool:
-        
-        if isinstance(element, str): element = TomatoImage(element)
+    def image_is_visible(self, image : TomatoImage,) -> bool:
+        pass
 
-        screen = self.screen_shot_tomato()
-        element_coordinates = self.find_element_in_screen(element, screen, section, under_step)
+class TomatoElement:
+    def __init__(self, image : TomatoImage | str | np.ndarray, x_pos : int | None=None, y_pos : int | None=None):
+        self.__utils = TomatoUtils()
+        self.__setImage(image)
+        self.__x = x_pos
+        self.__y = y_pos
+    
+    def __setImage(self, image : TomatoImage | str | np.ndarray):
+        if not isinstance(image, TomatoImage): self.__image = TomatoImage(image)
+        else: self.__image = image
+    
+    def get_image(self) -> TomatoImage:
+        return self.__image
+    
+    def get_center(self) -> tuple:
+        return (self.__x, self.__y)
+    
+    def __wait_until_mouse_hoover(self, timeout : int=10):
+        counter = 0
+        while mouse.get_position() != self.get_center():
+            time.sleep(0.1)
+            counter += 1
+            if counter >= timeout: break
+            continue
 
-        return not any(coord is None for coord in element_coordinates)
+    def update_coordinates(self, under_step : int | None=None, cutoff : float | None=None, show : bool=False):
+        screen = self.__utils.screen_shot_tomato()
+        self.__x, self.__y = self.__utils.find_image_in_screen(self.get_image(), screen, under_step, cutoff, show)
+        return self
+
+    def click(self, button : str="L"):
+        if None in self.get_center(): raise AttributeError("Cannot click: element coordinates are not set.")
+        mouse.move(self.__x, self.__y)
+        self.__wait_until_mouse_hoover()
+        if button.upper() == "L": mouse.click("left")
+        elif button.upper() == "R": mouse.click("right")
+        else: raise ValueError("Attribute 'button' must be either 'L' or 'R', referring to the left and right mouse buttons, respectively.")
+
+    def type(self, text : str):
+        self.click()
+        keyboard.write(text)
+
+    def input(self, info : str):
+        self.type(info)
+        keyboard.press_and_release("enter")
+
+    def delete_input(self):
+        self.click()
+        self.click()
+        keyboard.press_and_release("backspace")
+
+    def wait_visibility(self, under_step: int | None = None, cutoff: float | None = None, timeout: int = 10, wait_invisibility: bool = False):
+        start = time.time()
+
+        while True:
+            screen = self.__utils.screen_shot_tomato()
+            coord = self.__utils.find_image_in_screen(self.get_image(), screen, under_step, cutoff)
+
+            duration = time.time() - start
+            if duration > timeout:
+                state = "invisible" if wait_invisibility else "visible"
+                raise TimeoutError(f"Element wasn't {state} before timeout")
+
+            if (wait_invisibility and None in coord) or (not wait_invisibility and None not in coord):
+                break
+
+        self.__x, self.__y = coord if coord else (None, None)
+        return self
+
+
 
 
