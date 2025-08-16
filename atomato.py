@@ -190,13 +190,12 @@ class TomatoUtils:
             return closest["CENTER"]
         return(None, None)
 
-    def image_is_visible(self, image : TomatoImage,) -> bool:
-        pass
-
 class TomatoElement:
     def __init__(self, image : TomatoImage | str | np.ndarray, x_pos : int | None=None, y_pos : int | None=None):
         self.__utils = TomatoUtils()
         self.__setImage(image)
+        self.__height = self.__image.get_height()
+        self.__width = self.__image.get_width()
         self.__x = x_pos
         self.__y = y_pos
     
@@ -210,6 +209,25 @@ class TomatoElement:
     def get_center(self) -> tuple:
         return (self.__x, self.__y)
     
+    def get_width(self) -> int:
+        return self.__width
+    
+    def get_height(self) -> int:
+        return self.__height
+
+    def move_center(self, x_delta : int=0, y_delta : int=0):
+        try:
+            x_delta = int(x_delta)
+            y_delta = int(y_delta)
+        except ValueError as e:
+            raise TypeError(
+                f"Invalid input: x_delta='{x_delta}', y_delta='{y_delta}'. "
+                "Both must be convertible to integers."
+            ) from e
+
+        self.__x += x_delta
+        self.__y += y_delta
+
     def __wait_until_mouse_hoover(self, timeout : int=10):
         counter = 0
         while mouse.get_position() != self.get_center():
