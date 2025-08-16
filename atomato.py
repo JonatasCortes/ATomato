@@ -11,7 +11,23 @@ class TomatoImage:
     def __init__(self, image : str | np.ndarray):
         self.__setImage(image)
 
-    def __black_white_image(self, image : np.ndarray) -> np.ndarray:
+    def __grayscale_image(self, image : np.ndarray) -> np.ndarray:
+        """
+        Converts a colored image (np.ndarray) to its black-and-white (grayscale) version.
+
+        Parameters:
+            image (np.ndarray): Input image in RGB or RGBA format.
+
+        Returns:
+            np.ndarray: Grayscale image with dtype np.uint8.
+
+        Details:
+            - image[...,:3]: Extracts the RGB channels, discarding the alpha channel if present.
+            - np.dot(..., [0.299, 0.587, 0.114]): Computes the luminance using perceptual weights for red, green, and blue channels.
+            - astype(np.uint8): Converts the resulting float array to 8-bit unsigned integers for compatibility with OpenCV and standard image formats.
+        """
+        if not isinstance(image, np.ndarray):
+            raise TypeError("Input must be a NumPy ndarray.")
         if len(image.shape) == 3:
             return np.dot(image[...,:3], [0.299, 0.587, 0.114]).astype(np.uint8)
         return image
@@ -28,7 +44,7 @@ class TomatoImage:
                 raise ValueError("The provided image path doesn't exists")
         
         if raw_image.shape == 0: raise ValueError("The given image could not be resolved")
-        self.__image = self.__black_white_image(raw_image)
+        self.__image = self.__grayscale_image(raw_image)
 
     def get_height(self) -> int:
         return len(self.__image)
@@ -158,8 +174,8 @@ class TomatoUtils:
                 screen_section = self.__safe_section(screen_matrix, i, j, image_height, image_width)
                 if screen_section is None: continue
 
-                center_y = i + h_step // 2
-                center_x = j + v_step // 2
+                center_y = i + image_height // 2
+                center_x = j + image_width // 2
 
                 difference = self.distance_between_vectors(image_matrix, screen_section)
 
